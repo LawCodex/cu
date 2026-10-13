@@ -246,8 +246,42 @@ def convert():
     print(st)
 
 
+CONST = ("https://www.gacetaoficial.gob.cu/sites/default/files/goc-2019-ex5.pdf", "20261004033415", "GOC-2019-406-EX5")
+
+
+def constitution():
+    """Constitution of 2019 (Gaceta Oficial No. 5 Extraordinaria, 10-04-2019). The database's
+    search has no record for it and the site was intermittently unreachable, so the issue PDF
+    is taken from its Internet Archive capture."""
+    d = os.path.join(RAW, "const")
+    os.makedirs(d, exist_ok=True)
+    p = os.path.join(d, "c.pdf")
+    url, ts, ident = CONST
+    if not P.pdf_ok(p):
+        r = s.get(f"https://web.archive.org/web/{ts}id_/{url}", timeout=300)
+        open(p, "wb").write(r.content)
+    seg = cut(P.extract_pages(p), ident)
+    # the PDF's font maps capital U to "u" inside upper-case words ("ARTÍCuLO", "FuNDAMENTOS")
+    for _ in range(2):
+        seg = re.sub(r"(?<=[A-ZÁÉÍÓÚÑ])u(?=[A-ZÁÉÍÓÚÑ.,;: ])", "U", seg)
+    seg = re.sub(r"(?<=\S)[ \t]+(ARTÍCULO \d+\.)", r"\n\1", seg)
+    md = P.lines_to_md(P.clean_pages([seg], head_n=0, foot_n=0))
+    front = {"title": "Constitución de la República de Cuba", "identifier": ident, "type": "constitution",
+             "jurisdiction": "cu", "language": "es", "date": "2019-04-10",
+             "gaceta_oficial": "Gaceta Oficial No. 5 Extraordinaria de 10 de abril de 2019", "status": "in_force",
+             "source": url, "archived_source": f"https://web.archive.org/web/{ts}/{url}", "retrieved": TODAY}
+    fm = yaml.safe_dump(front, allow_unicode=True, sort_keys=False, width=1000).strip()
+    path = os.path.join(REPO, "constitucion", "constitucion-de-la-republica-de-cuba-2019.md")
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    open(path, "w", encoding="utf-8").write("\n".join(["---", fm, "---", "", "# Constitución de la República de Cuba", "",
+        "> Proclamada el 10 de abril de 2019; texto publicado en la Gaceta Oficial No. 5 Extraordinaria de 2019 "
+        "(copia archivada por el Internet Archive del PDF oficial).", "", md, ""]))
+    print("constitution", md.count("###### "))
+
+
 if __name__ == "__main__":
     cmd = sys.argv[1] if len(sys.argv) > 1 else "all"
-    for step, fn in (("search", search), ("records", records), ("gacetas", gacetas), ("convert", convert)):
+    for step, fn in (("search", search), ("records", records), ("gacetas", gacetas), ("convert", convert),
+                     ("constitution", constitution)):
         if cmd in (step, "all"):
             fn()
